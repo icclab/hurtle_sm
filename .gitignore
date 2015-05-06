@@ -1,0 +1,7 @@
+.idea/
+*.pyc
+*.log
+build/
+dist/
+atlassian-ide-plugin.xml
+
