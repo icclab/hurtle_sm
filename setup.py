@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# Copyright 2014-2015 Zuercher Hochschule fuer Angewandte Wissenschaften
+#   All Rights Reserved.
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
 #   You may obtain a copy of the License at
@@ -12,15 +14,29 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-from distutils.core import setup
+from setuptools import setup
 
-setup(name='mcn_sm',
-      version='0.2',
-      description='Library for creating MCN service managers',
-      author='Andy Edmonds',
-      author_email='edmo@zhaw.ch',
-      url='http://blog.zhaw.ch/icclab',
-      license='Apache 2.0',
-      packages=['mcn', 'mcn.sm', 'mcn.so'],
-      requires=['pyssf', 'requests', 'mako', 'retrying']
-     )
+setup(
+    name='sm',
+    version='0.3',
+    description='Library for creating service managers and orchestrators',
+    author='Andy Edmonds',
+    author_email='edmo@zhaw.ch',
+    url='http://blog.zhaw.ch/icclab',
+    license='Apache 2.0',
+    packages=['sm', 'sm.so'],
+    install_requires=[
+        'pyssf',
+        'requests',
+        'mako',
+        'retrying',
+        'tornado',
+        'graypy',
+        'debtcollector',
+        'monotonic',
+        'pycrypto',
+        'ecdsa',
+        'jsonpickle',
+        'pymongo'],
+    scripts=['bin/service_manager']
+)

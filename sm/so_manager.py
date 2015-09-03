@@ -1,4 +1,4 @@
-# Copyright 2014 Zuercher Hochschule fuer Angewandte Wissenschaften
+# Copyright 2014-2015 Zuercher Hochschule fuer Angewandte Wissenschaften
 # Copyright (c) 2013-2015, Intel Performance Learning Solutions Ltd, Intel Corporation.
 # All Rights Reserved.
 #
@@ -21,29 +21,25 @@ import json
 from mako.template import Template
 import os
 import random
-import requests
-from retrying import retry
 import shutil
 import tempfile
+import time
 from threading import Thread
 from urlparse import urlparse
 import uuid
 
 from occi.core_model import Resource, Link
-
-from mcn.sm import CONFIG
-from mcn.sm import LOG
+from sm.config import CONFIG
+from sm.log import LOG
+from sm.retry_http import http_retriable_request
 
 
 HTTP = 'http://'
-WAIT = CONFIG.get('cloud_controller', 'wait_time', 2000)
-ATTEMPTS = CONFIG.get('cloud_controller', 'max_attempts', 5)
-
-# TODO if error report verbosely and perform recovery
+WAIT = int(CONFIG.get('cloud_controller', 'wait_time', 2000))
+ATTEMPTS = int(CONFIG.get('cloud_controller', 'max_attempts', 5))
 
 
-class ServiceParameters():
-    #TODO move this class into Service.py
+class ServiceParameters:
     def __init__(self):
         self.service_params = {}
         service_params_file_path = CONFIG.get('service_manager', 'service_params', '')
@@ -140,7 +136,7 @@ class AsychExe(Thread):
 
 
 # XXX push common functionality here
-class Task():
+class Task:
 
     def __init__(self, entity, extras, state):
         self.entity = entity
@@ -176,6 +172,8 @@ class InitSO(Task):
         if not self.entity.extras:
             self.entity.extras = {}
         self.entity.extras['repo_uri'] = self.__create_app()
+        # adding tenant to entity.extras for future checks later when retrieving resource
+        self.entity.extras['tenant_name'] = self.extras['tenant_name']
 
         return self.entity, self.extras
 
@@ -193,7 +191,7 @@ class InitSO(Task):
         url = self.nburl + '/app/'
         LOG.debug('Requesting container to execute SO Bundle: ' + url)
         LOG.info('Sending headers: ' + heads.__repr__())
-        r = _http_retriable_request('POST', url, headers=heads, authenticate=True)
+        r = http_retriable_request('POST', url, headers=heads, authenticate=True)
 
         loc = r.headers.get('Location', '')
         if loc == '':
@@ -217,7 +215,7 @@ class InitSO(Task):
         headers = {'Accept': 'text/occi'}
         LOG.debug('Requesting container\'s git URL ' + url)
         LOG.info('Sending headers: ' + headers.__repr__())
-        r = _http_retriable_request('GET', url, headers=headers, authenticate=True)
+        r = http_retriable_request('GET', url, headers=headers, authenticate=True)
 
         attrs = r.headers.get('X-OCCI-Attribute', '')
         if attrs == '':
@@ -238,9 +236,9 @@ class InitSO(Task):
     def __ensure_ssh_key(self):
         url = self.nburl + '/public_key/'
         heads = {'Accept': 'text/occi'}
-        resp = _http_retriable_request('GET', url, headers=heads, authenticate=True)
+        resp = http_retriable_request('GET', url, headers=heads, authenticate=True)
         locs = resp.headers.get('x-occi-location', '')
-        #Split on spaces, test if there is at least one key registered
+        # Split on spaces, test if there is at least one key registered
         if len(locs.split()) < 1:
             LOG.debug('No SM SSH registered. Registering default SM SSH key.')
             occi_key_name, occi_key_content = self.__extract_public_key()
@@ -250,7 +248,7 @@ class InitSO(Task):
                                   'X-OCCI-Attribute':'occi.key.name="' + occi_key_name + '", occi.key.content="' +
                                                      occi_key_content + '"'
             }
-            _http_retriable_request('POST', url, headers=create_key_headers, authenticate=True)
+            http_retriable_request('POST', url, headers=create_key_headers, authenticate=True)
         else:
             LOG.debug('Valid SM SSH is registered with OpenShift.')
 
@@ -374,7 +372,7 @@ class ActivateSO(Task):
 
         LOG.debug('Initialising SO with: ' + url)
         LOG.info('Sending headers: ' + heads.__repr__())
-        _http_retriable_request('PUT', url, headers=heads)
+        http_retriable_request('PUT', url, headers=heads)
 
 
 class DeploySO(Task):
@@ -406,13 +404,14 @@ class DeploySO(Task):
             heads['X-OCCI-Attribute'] = occi_attrs
         LOG.debug('Deploying SO with: ' + url)
         LOG.info('Sending headers: ' + heads.__repr__())
-        _http_retriable_request('POST', url, headers=heads, params=params)
+        http_retriable_request('POST', url, headers=heads, params=params)
 
         self.entity.attributes['mcn.service.state'] = 'deploy'
         LOG.debug('SO Deployed ')
         return self.entity, self.extras
 
 
+# TODO this can only be executed when heat has completed!!!!
 class ProvisionSO(Task):
     def __init__(self, entity, extras):
         Task.__init__(self, entity, extras, state='provision')
@@ -420,7 +419,15 @@ class ProvisionSO(Task):
         self.host = urlparse(self.repo_uri).netloc.split('@')[1]
 
     def run(self):
+        # this can only run until the deployment has complete!
+        # this will block until run() returns
+
         url = HTTP + self.host + '/orchestrator/default'
+
+        # XXX with stuff like this, we need to have a callback mechanism... this will block otherwise
+        while not self.deploy_complete(url):
+            time.sleep(13)
+
         params = {'action': 'provision'}
         heads = {
             'Category': 'provision; scheme="http://schemas.mobile-cloud-networking.eu/occi/service#"',
@@ -433,10 +440,41 @@ class ProvisionSO(Task):
             heads['X-OCCI-Attribute'] = occi_attrs
         LOG.debug('Provisioning SO with: ' + url)
         LOG.info('Sending headers: ' + heads.__repr__())
-        _http_retriable_request('POST', url, headers=heads, params=params)
+        http_retriable_request('POST', url, headers=heads, params=params)
 
         self.entity.attributes['mcn.service.state'] = 'provision'
         return self.entity, self.extras
+
+    def deploy_complete(self, url):
+        # XXX fugly - code copied from Resolver
+        heads = {
+            'Content-type': 'text/occi',
+            'Accept': 'application/occi+json',
+            'X-Auth-Token': self.extras['token'],
+            'X-Tenant-Name': self.extras['tenant_name'],
+        }
+
+        LOG.info('checking service state at: ' + url)
+        LOG.info('sending headers: ' + heads.__repr__())
+
+        r = http_retriable_request('GET', url, headers=heads)
+        attrs = json.loads(r.content)
+
+        if len(attrs['attributes']) > 0:
+            attr_hash = attrs['attributes']
+            stack_state = ''
+            try:
+                stack_state = attr_hash['occi.mcn.stack.state']
+            except KeyError:
+                pass
+
+            LOG.info('Current service state: ' + str(stack_state))
+            if stack_state == 'CREATE_COMPLETE' or stack_state == 'UPDATE_COMPLETE':
+                LOG.info('Stack is ready')
+                return True
+            else:
+                LOG.info('Stack is not ready. Current state state: ' + stack_state)
+                return False
 
 
 class RetrieveSO(Task):
@@ -461,7 +499,7 @@ class RetrieveSO(Task):
                 'X-Tenant-Name': self.extras['tenant_name']}
             LOG.info('Getting state of service orchestrator with: ' + self.host + '/orchestrator/default')
             LOG.info('Sending headers: ' + heads.__repr__())
-            r = _http_retriable_request('GET', HTTP + self.host + '/orchestrator/default', headers=heads)
+            r = http_retriable_request('GET', HTTP + self.host + '/orchestrator/default', headers=heads)
 
             attrs = r.headers['x-occi-attribute'].split(', ')
             for attr in attrs:
@@ -504,7 +542,7 @@ class RetrieveSO(Task):
 
         return self.entity, self.extras
 
-
+# TODO can only be executed when provisioning is complete
 class UpdateSO(Task):
     def __init__(self, entity, extras, updated_entity):
         Task.__init__(self, entity, extras, state='update')
@@ -543,7 +581,7 @@ class UpdateSO(Task):
         LOG.debug('Provisioning SO with: ' + url)
         LOG.info('Sending headers: ' + heads.__repr__())
 
-        _http_retriable_request('POST', url, headers=heads)
+        http_retriable_request('POST', url, headers=heads)
 
         self.entity.attributes['mcn.service.state'] = 'update'
         return self.entity, self.extras
@@ -573,7 +611,7 @@ class DestroySO(Task):
         LOG.info('Disposing service orchestrator with: ' + url)
         LOG.info('Sending headers: ' + heads.__repr__())
 
-        _http_retriable_request('DELETE', url, headers=heads)
+        http_retriable_request('DELETE', url, headers=heads)
 
         url = self.nburl + self.entity.identifier.replace('/' + self.entity.kind.term + '/', '/app/')
         heads = {'Content-Type': 'text/occi',
@@ -581,77 +619,6 @@ class DestroySO(Task):
                  'X-Tenant-Name': self.extras['tenant_name']}
         LOG.info('Disposing service orchestrator container via CC... ' + url)
         LOG.info('Sending headers: ' + heads.__repr__())
-        _http_retriable_request('DELETE', url, headers=heads, authenticate=True)
+        http_retriable_request('DELETE', url, headers=heads, authenticate=True)
 
         return self.entity, self.extras
-
-
-def _retry_if_http_error(exception):
-    """
-    Defines which type of exceptions allow for a retry of the request
-
-    :param exception: the raised exception
-    :return: True if retrying the request is possible
-    """
-    error = False
-    if isinstance(exception, requests.HTTPError):
-        if exception.response.status_code == 503:
-            LOG.info('Requesting retry: response code: ' + str(exception.response.status_code))
-            LOG.error('Exception: ' + exception.__repr__())
-            error = True
-    elif isinstance(exception, requests.ConnectionError):
-        LOG.info('Requesting retry: ConnectionError')
-        LOG.error('Exception: ' + exception.__repr__())
-        error = True
-    return error
-
-
-@retry(retry_on_exception=_retry_if_http_error, wait_fixed=WAIT, stop_max_attempt_number=ATTEMPTS)
-def _http_retriable_request(verb, url, headers={}, authenticate=False, params={}):
-    """
-    Sends an HTTP request, with automatic retrying in case of HTTP Errors 500 or ConnectionErrors
-    _http_retriable_request('POST', 'http://cc.cloudcomplab.ch:8888/app/', headers={'Content-Type': 'text/occi', [...]}
-                            , authenticate=True)
-    :param verb: [POST|PUT|GET|DELETE] HTTP keyword
-    :param url: The URL to use.
-    :param headers: Headers of the request
-    :param kwargs: May contain authenticate=True parameter, which is used to make requests requiring authentication,
-                    e.g. CC requests
-    :return: result of the request
-    """
-    LOG.debug(verb + ' on ' + url + ' with headers ' + headers.__repr__())
-
-    auth = ()
-    if authenticate:
-        user = CONFIG.get('cloud_controller', 'user')
-        pwd = CONFIG.get('cloud_controller', 'pwd')
-        auth = (user, pwd)
-
-    if verb in ['POST', 'DELETE', 'GET', 'PUT']:
-        try:
-            r = None
-            if verb == 'POST':
-                if authenticate:
-                    r = requests.post(url, headers=headers, auth=auth, params=params)
-                else:
-                    r = requests.post(url, headers=headers, params=params)
-            elif verb == 'DELETE':
-                if authenticate:
-                    r = requests.delete(url, headers=headers, auth=auth, params=params)
-                else:
-                    r = requests.delete(url, headers=headers, params=params)
-            elif verb == 'GET':
-                if authenticate:
-                    r = requests.get(url, headers=headers, auth=auth, params=params)
-                else:
-                    r = requests.get(url, headers=headers, params=params)
-            elif verb == 'PUT':
-                if authenticate:
-                    r = requests.put(url, headers=headers, auth=auth, params=params)
-                else:
-                    r = requests.put(url, headers=headers, params=params)
-            r.raise_for_status()
-            return r
-        except requests.HTTPError as err:
-            LOG.error('HTTP Error: should do something more here!' + err.message)
-            raise err

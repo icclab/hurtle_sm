@@ -1,3 +1,0 @@
-[submodule "example/bundle"]
-	path = example/bundle
-	url = https://github.com/icclab/hurtle_sample_so.git
