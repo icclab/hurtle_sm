@@ -13,7 +13,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-__author__ = 'andy'
 
 from occi.backend import KindBackend
 
@@ -27,6 +26,7 @@ from sm.so_manager import RetrieveSO
 from sm.so_manager import UpdateSO
 from sm.so_manager import DestroySO
 
+__author__ = 'andy'
 
 # service state model:
 #  - initialise
@@ -54,6 +54,7 @@ class ServiceBackend(KindBackend):
         # create the SO container
         InitSO(entity, extras).run()
         # run background tasks
+        # TODO this would be better using a workflow engine!
         AsychExe([ActivateSO(entity, extras), DeploySO(entity, extras),
                   ProvisionSO(entity, extras)], self.registry).start()
 

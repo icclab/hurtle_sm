@@ -18,8 +18,8 @@ from setuptools import setup
 
 setup(
     name='sm',
-    version='0.3',
-    description='Library for creating service managers and orchestrators',
+    version='0.4',
+    description='Command and library for creating service managers and orchestrators',
     author='Andy Edmonds',
     author_email='edmo@zhaw.ch',
     url='http://blog.zhaw.ch/icclab',

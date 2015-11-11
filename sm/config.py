@@ -13,11 +13,12 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-__author__ = 'andy'
 
 import ConfigParser
 import os
 from optparse import OptionParser
+
+__author__ = 'andy'
 
 
 class DefaultConfigParser(ConfigParser.ConfigParser):

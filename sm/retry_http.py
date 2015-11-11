@@ -13,7 +13,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-__author__ = 'andy'
 
 import requests
 from retrying import retry
@@ -21,6 +20,8 @@ from retrying import retry
 from config import CONFIG
 from log import LOG
 
+
+__author__ = 'andy'
 
 WAIT = int(CONFIG.get('cloud_controller', 'wait_time', 2000))
 ATTEMPTS = int(CONFIG.get('cloud_controller', 'max_attempts', 5))

@@ -13,7 +13,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-__author__ = 'andy'
 
 import json
 import requests
@@ -30,6 +29,7 @@ from occi.wsgi import Application
 from tornado import httpserver
 from tornado import ioloop
 from tornado import wsgi
+from wsgiref.simple_server import make_server
 
 from sm.backends import ServiceBackend
 from sm.config import CONFIG, CONFIG_PATH
@@ -38,11 +38,13 @@ from sdk.mcn import util
 from sdk.mcn.security import KeyStoneAuthService
 
 import jsonpickle
-import json
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 from sm.mongo_key_replacer import KeyTransform
 from ConfigParser import NoSectionError
+
+__author__ = 'andy'
+
 
 class SMRegistry(NonePersistentRegistry):
 
@@ -112,7 +114,8 @@ class SMMongoRegistry(MongoRegistry):
     def get_resource(self, key, extras):
         result = None
         if key in self.resources:
-            if self.resources[key].extras is not None and self.resources[key].extras['tenant_name'] == self.get_extras(extras):
+            if self.resources[key].extras is not None and self.resources[key].extras['tenant_name'] == \
+                    self.get_extras(extras):
                 result = self.resources[key]
         return result
 
@@ -128,7 +131,7 @@ class SMMongoRegistry(MongoRegistry):
         return extras['tenant_name']
 
 
-class MongoConnection():
+class MongoConnection:
     def __init__(self, db_host):
         connection = MongoClient(db_host)
         resources_db = connection.resources_db
@@ -181,7 +184,7 @@ class MApplication(Application):
         return self._call_occi(environ, response, token=token, tenant_name=tenant, registry=self.registry)
 
 
-class Service():
+class Service:
 
     def __init__(self, app, srv_type=None):
         # openstack objects tracking the keystone service and endpoint
@@ -251,9 +254,10 @@ class Service():
             keystone = client.Client(token=self.token, tenant_name=self.tenant_name, auth_url=self.design_uri)
 
             # taken from the kind definition
-            self.srv_ep = keystone.services.create(self.srv_type.scheme+self.srv_type.term,
-                                         self.srv_type.scheme+self.srv_type.term,
-                                         self.srv_type.title)
+            self.srv_ep = keystone.services.create(
+                self.srv_type.scheme+self.srv_type.term,
+                self.srv_type.scheme+self.srv_type.term,
+                self.srv_type.title)
 
             internal_url = admin_url = public_url = self.service_endpoint
 
@@ -266,18 +270,24 @@ class Service():
         else:
             LOG.info('Service is already registered with keystone. Service endpoint is: ' + self.srv_ep)
 
-    def shutdown_handler(self, signum = None, frame = None):
+    def shutdown_handler(self, signum=None, frame=None):
         LOG.info('Service shutting down... ')
-        if self.reg_srv:
+        if not self.DEBUG:
+            ioloop.IOLoop.instance().add_callback(self.deregister_service())
+        else:
             self.deregister_service()
-        sys.exit(0)
 
     def deregister_service(self):
-
+        if not self.reg_srv:
+            return
         if self.srv_ep:
             LOG.debug('De-registering the service with the keystone service...')
             keystone = client.Client(token=self.token, tenant_name=self.tenant_name, auth_url=self.design_uri)
             keystone.services.delete(self.srv_ep.id)  # deletes endpoint too
+            if not self.DEBUG:
+                ioloop.IOLoop.instance().stop()
+            else:
+                sys.exit(0)
 
     def run(self):
         self.app.register_backend(self.srv_type, self.service_backend)
@@ -285,9 +295,9 @@ class Service():
         if self.reg_srv:
             self.register_service()
 
-        # setup shutdown handler for de-registration of service
-        for sig in [signal.SIGTERM, signal.SIGINT, signal.SIGHUP, signal.SIGQUIT]:
-            signal.signal(sig, self.shutdown_handler)
+            # setup shutdown handler for de-registration of service
+            for sig in [signal.SIGTERM, signal.SIGINT, signal.SIGHUP, signal.SIGQUIT]:
+                signal.signal(sig, self.shutdown_handler)
 
         up = urlparse(self.stg['service_endpoint'])
         dep_port = CONFIG.get('general', 'port')
@@ -296,13 +306,11 @@ class Service():
                      'Service port number (' + str(up.port) + ') is taken from the service manifest')
 
         if self.DEBUG:
-            LOG.info('Service Manager running on interfaces, running on port: ' + str(up.port))
-            from wsgiref.simple_server import make_server
+            LOG.debug('Using WSGI reference implementation')
             httpd = make_server('', int(up.port), self.app)
             httpd.serve_forever()
         else:
-            # XXX shutdown handler is not called, therefore service remains registered
-            # TODO figure out this issue
+            LOG.debug('Using tornado implementation')
             container = wsgi.WSGIContainer(self.app)
             http_server = httpserver.HTTPServer(container)
             http_server.listen(int(up.port))
@@ -311,7 +319,6 @@ class Service():
         LOG.info('Service Manager running on interfaces, running on port: ' + str(up.port))
 
     def get_category(self, svc_kind):
-
         keystone = client.Client(token=self.token, tenant_name=self.tenant_name, auth_url=self.design_uri)
 
         try:
