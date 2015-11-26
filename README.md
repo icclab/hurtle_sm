@@ -1,19 +1,25 @@
-# Hurtle Service Manger
+# MCN Service Manger
+This is the MCN Service Manager.
 
-## Quickly Getting Started
+## Installation Instructions
 
-This is the Hurtle Service Manager.
 
-To checkout the code and also setup the example SO, do the following:
+The following installation instructions have been tested and verified with the centos:7 docker image. Other OS should work just fine, as long as they provide you with a way of installing python.
 
-    $ git clone https://github.com/icclab/hurtle_sm.git
-    $ cd hurtle_sm
-    $ git submodule init
-    $ git submodule update
-    
-The latest version of the Hurtle Service Manager is a library which needs to be installed.
+	# install the epel repo, it contains python-pip
+	yum install epel-release
+	
+	# get git and pip, a c compiler and python headers are also requires for some dependencies
+	yum install gcc python-devel git python-pip
+	
+	# clone this repo
+	git clone https://github.com/icclab/hurtle_sm.git
+	
+	# install the dependencies
+	cd hurtle_sm ; python setup.py install
 
-	$ python setup.py install
+
+## Quickstart
 
 An example of a simple Service definition can be found in `./example`
 For service manager implementers they simply need to follow this example for their own service.
@@ -26,21 +32,17 @@ The example service manager (`example/data/service_manifest.json`) uses and exte
 
 ## Upfront Notice
 
-This is important. The SM will **only** deploy the SO's code that is on its `master` branch.
+This is important. The SM will **only** deploy the SO's code that is on its `master` branch. This only applies if you plan to deploy on OpenShift 2.
 
-## Further Documentation
+## Next Steps
 
-1. Clone [this project](https://github.com/icclab/hurtle_sm.git)
+1. Follow the installations instructions above
 
-2. Install the service manager library:
-
-        $ python ./setup.py install
-
-3. Use the example service manifest as your starting point (`example/data/service_manifest.json`). Edit your service type 
+2. Use the example service manifest as your starting point (`example/data/service_manifest.json`). Edit your service type 
 definition. For example:
 
         {
-    	    "service_type": "http://schemas.hurtle.it/occi/sm#test-compo",
+    	    "service_type": "http://schemas.mobile-cloud-networking.eu/occi/sm#test-compo",
     	    "service_description": "Test composed service",
     	    "service_attributes": {
     	        "mcn.endpoint.p3": "immutable",
@@ -48,10 +50,10 @@ definition. For example:
     	    },
     	    "service_endpoint": "http://127.0.0.1:8888/test-compo/",
     	    "depends_on": [
-              { "http://schemas.hurtle.it/occi/sm#demo1": { "inputs": [] } },
-              { "http://schemas.hurtle.it/occi/sm#demo2": {
+              { "http://schemas.mobile-cloud-networking.eu/occi/sm#demo1": { "inputs": [] } },
+              { "http://schemas.mobile-cloud-networking.eu/occi/sm#demo2": {
                   "inputs": [
-                    "http://schemas.hurtle.it/occi/sm#demo1#mcn.endpoint.p1"
+                    "http://schemas.mobile-cloud-networking.eu/occi/sm#demo1#mcn.endpoint.p1"
                   ] }
               }
             ],
@@ -65,9 +67,9 @@ definition. For example:
     
     In the example above,
         
-        { "http://schemas.hurtle.it/occi/sm#demo2": {
+        { "http://schemas.mobile-cloud-networking.eu/occi/sm#demo2": {
             "inputs": [
-                "http://schemas.hurtle.it/occi/sm#demo1#mcn.endpoint.p1"
+                "http://schemas.mobile-cloud-networking.eu/occi/sm#demo1#mcn.endpoint.p1"
             ] 
         }
     the `demo2` service requires a parameter named `mcn.endpoint.p1` from the `demo1` service. 
@@ -76,9 +78,9 @@ definition. For example:
     
     On the other hand, to actually retrieve the endpoints and generally attributes of the service dependencies, you **must** use the Resolver class as defined in the service_orchestrator.py file. More details in the corresponding section.
 
-4. Take a copy of `etc/sm.cfg` and customise it according to your own service (e.g. setting the path to your SO bundle as well as to the Service Manifest)
+3. Take a copy of `etc/sm_ops2.cfg` or `etc/sm_ops3.cfg` and customise it according to your own service (e.g. setting the path to your SO bundle as well as to the Service Manifest)
 
-5. Edit the existing SO implementation and make it work for you.
+4. Edit the existing SO implementation and make it work for you.
 
 5. Run your service manager. Example using the demo:
 
@@ -123,12 +125,12 @@ against a SM the end user needs to supply:
 
  * tenant name: this should be provided through the `X-Auth-Token` HTTP header
  * token: this should be provided through the `X-Tenant-Name` HTTP header. If no `X-Tenant-Name` is supplied the 
- default of `admin` will be used (See [here](https://github.com/icclab/hurtle_cc_sdk/blob/master/sdk/services.py#L86) for why).
+ default of `admin` will be used (See [here](https://git.mobile-cloud-networking.eu/cloudcontroller/mcn_cc_sdk/blob/master/sdk/services.py#L86) for why).
 
 ### Generating a Keystone Token
-**IMPORTANT:** you're user must be assigned `admin` permissions for the project they're part of.
+**IMPORTANT:** your user must be assigned `admin` permissions for the project they're part of.
 
-For this to work you will need the keystone command line tools installed (`pip install python-keystoneclient`) 
+For this to work you will need the keystone command line tools installed. They are installed if you followed the installation instructions above.
 and also your OpenStack credentials.
 
 To create a keystone token issue the following commands:
@@ -145,6 +147,7 @@ configuration file.
  * `service_manager_admin` - this section is related to the registration of the service with keystone
  * `cloud_controller` - configuration related to the cloudcontroller
 
+There are two samples provided, one each for OpenShift 2 and OpenShift 3.
 Please see the configuration file `etc/sm.cfg` for further parameter descriptions.
 This service manager framework assumes that the bundle supplied will be deployed using git.
 
@@ -154,16 +157,16 @@ adding those parameters to a JSON file. There is an example of this in `etc/serv
 
 ### Configuration of demo SO bundle
 
-The demo SO bundle comes from: https://github.com/icclab/hurtle_sample_so. It is added as a 
-submodule and can be retreived using the above instructions.
+The demo SO bundle comes from [here](https://github.com/icclab/hurtle_sample_so). You will have to clone it manually:
+
+	git glone https://github.com/icclab/hurtle_sample_so
 
 There are some support files that the SM and the CC rely upon. These support files must be stored under the root of
 your SO bundle in a folder named `support`.
 
 If you wish to run the example you will possibly have to update one of them.
 
-The `support/pre_start_python` file contains a variable that points to the AAA service. For this demo, the URI value of
-`DESIGN_URI` should be set to your OpenStack keystone API e.g. `http://$KEYSTONE_HOST:5000/v2.0`.
+The `support/pre_start_python` file contains a variable that points to the OpenStack keystone service. For this demo, the URI value of `DESIGN_URI` should be set to your OpenStack keystone API e.g. `http://$KEYSTONE_HOST:5000/v2.0`.
 
 There is no further configuration needed for the bundle.
 
@@ -201,11 +204,7 @@ request
 
 ## Dependency notes
 
-1. You must have the CC SDK installed on the machine where you run your service manager. To do so:
-
-        $ git clone https://github.com/icclab/hurtle_cc_sdk.git
-        $ cd hurtle_cc_sdk
-        $ python ./setup.py install
+1. You must have the MCN SDK installed on the machine where you run your service manager. To do so, simply follow the installation instructions above.
 
 ## Questions?
 
@@ -215,6 +214,6 @@ Give edmo@zhaw.ch a mail
 
 <div align="center" >
 <a href='http://blog.zhaw.ch/icclab'>
-<img src="https://raw.githubusercontent.com/icclab/hurtle/master/docs/figs/mcn_logo.png" title="mobile cloud networking" width=400px>
+<img src="https://raw.githubusercontent.com/icclab/hurtle/master/docs/figs/mcn_logo.png" title="mobile cloud networking" width=400px
 </a>
 </div>

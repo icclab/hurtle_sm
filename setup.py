@@ -37,6 +37,7 @@ setup(
         'pycrypto',
         'ecdsa',
         'jsonpickle',
+	'python-keystoneclient',
         'pymongo'],
     scripts=['bin/service_manager']
 )
