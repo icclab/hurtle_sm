@@ -1,0 +1,10 @@
+{
+    "service_type": "http://schemas.mobile-cloud-networking.eu/occi/sm#sample_so",
+    "service_description": "Test sample service",
+    "service_attributes": {
+        "mcn.endpoint.p3": "immutable",
+        "mcn.endpoint.p4": "immutable"
+    },
+    "service_endpoint": "http://localhost:8889/sample_so/",
+    "depends_on": []
+}
