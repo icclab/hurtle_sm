@@ -16,15 +16,30 @@
 
 from occi.backend import KindBackend
 
-from sm.so_manager import ServiceParameters
-from sm.so_manager import AsychExe
-from sm.so_manager import InitSO
-from sm.so_manager import ActivateSO
-from sm.so_manager import DeploySO
-from sm.so_manager import ProvisionSO
-from sm.so_manager import RetrieveSO
-from sm.so_manager import UpdateSO
-from sm.so_manager import DestroySO
+from sm.config import CONFIG
+manager = CONFIG.get('general', 'manager', default='so_manager')
+
+# generic manager stuff
+from sm.managers.generic import ServiceParameters
+from sm.managers.generic import AsychExe
+
+# depending on config, we import a different manager and ensure consistent names
+if manager == 'so_manager':
+    from sm.managers.so_manager import InitSO as Init
+    from sm.managers.so_manager import ActivateSO as Activate
+    from sm.managers.so_manager import DeploySO as Deploy
+    from sm.managers.so_manager import ProvisionSO as Provision
+    from sm.managers.so_manager import RetrieveSO as Retrieve
+    from sm.managers.so_manager import UpdateSO as Update
+    from sm.managers.so_manager import DestroySO as Destroy
+elif manager == 'openbaton':
+    from sm.managers.openbaton_manager import Init
+    from sm.managers.openbaton_manager import Activate
+    from sm.managers.openbaton_manager import Deploy
+    from sm.managers.openbaton_manager import Provision
+    from sm.managers.openbaton_manager import Retrieve
+    from sm.managers.openbaton_manager import Update
+    from sm.managers.openbaton_manager import Destroy
 
 __author__ = 'andy'
 
@@ -52,25 +67,25 @@ class ServiceBackend(KindBackend):
         super(ServiceBackend, self).create(entity, extras)
         extras['srv_prms'] = self.srv_prms
         # create the SO container
-        InitSO(entity, extras).run()
+        Init(entity, extras).run()
         # run background tasks
         # TODO this would be better using a workflow engine!
-        AsychExe([ActivateSO(entity, extras), DeploySO(entity, extras),
-                  ProvisionSO(entity, extras)], self.registry).start()
+        AsychExe([Activate(entity, extras), Deploy(entity, extras),
+                  Provision(entity, extras)], self.registry).start()
 
     def retrieve(self, entity, extras):
         super(ServiceBackend, self).retrieve(entity, extras)
-        RetrieveSO(entity, extras).run()
+        Retrieve(entity, extras).run()
 
     def delete(self, entity, extras):
         super(ServiceBackend, self).delete(entity, extras)
         extras['srv_prms'] = self.srv_prms
-        AsychExe([DestroySO(entity, extras)]).start()
+        AsychExe([Destroy(entity, extras)]).start()
 
     def update(self, old, new, extras):
         super(ServiceBackend, self).update(old, new, extras)
         extras['srv_prms'] = self.srv_prms
-        UpdateSO(old, extras, new).run()
+        Update(old, extras, new).run()
 
     def replace(self, old, new, extras):
         raise NotImplementedError()
