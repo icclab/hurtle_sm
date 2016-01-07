@@ -21,7 +21,9 @@ sm_name = service_shema.split('#')[1]
 cc_url = CONFIG.get('cloud_controller', 'nb_api', False)
 if not cc_url:
     raise RuntimeError('No Cloud Controller specified in the configuration file.')
-db_host = 'localhost'
+db_host = CONFIG.get('mongo', 'host', False)
+if not db_host:
+    raise RuntimeError('No MongoDB host specified in the configuration file.')
 
 
 def get_mongo_connection():
