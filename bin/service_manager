@@ -19,8 +19,13 @@ __author__ = 'andy'
 
 from sm.service import Service
 from sm.service import MApplication
+from sm import admin
+
+import thread
 
 if __name__ == '__main__':
+
+    thread.start_new_thread(admin.server, ('0.0.0.0', 8081))
 
     # Create a service...
     srv = Service(MApplication())
