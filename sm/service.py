@@ -43,6 +43,10 @@ from bson.objectid import ObjectId
 from sm.mongo_key_replacer import KeyTransform
 from ConfigParser import NoSectionError
 
+from sm import occi_ext
+from occi import backend
+MIXIN_BACKEND = backend.MixinBackend()
+
 __author__ = 'andy'
 
 
@@ -181,8 +185,24 @@ class MApplication(Application):
         if not auth.verify(token=token, tenant_name=tenant):
             raise HTTPError(401, 'Token is not valid. You likely need an updated token.')
 
+        _register_cost(self)
+        _register_location(self)
+
         return self._call_occi(environ, response, token=token, tenant_name=tenant, registry=self.registry)
 
+def _register_cost(app):
+     # cost value mixin
+    cost = CONFIG.get('service_manager', 'cost', "10")
+    res_temp = occi_ext.CostTemplate("http://schemas.mobile-cloud-networking.eu/occi/sm/cost#", cost,
+                                    related=[occi_ext.COST_TEMPLATE])
+    app.register_backend(res_temp, MIXIN_BACKEND)
+
+def _register_location(app):
+     # location value mixin
+    location = CONFIG.get('service_manager', 'location', "bart.cloudcomplab.ch")
+    res_temp = occi_ext.LocationTemplate("http://schemas.mobile-cloud-networking.eu/occi/sm/location#", location,
+                                    related=[occi_ext.LOCATION_TEMPLATE])
+    app.register_backend(res_temp, MIXIN_BACKEND)
 
 class Service:
 
@@ -320,44 +340,54 @@ class Service:
 
     def get_category(self, svc_kind):
         keystone = client.Client(token=self.token, tenant_name=self.tenant_name, auth_url=self.design_uri)
+        svc_ep = None
+        try:
+            svc = keystone.services.findall(type=svc_kind.keys()[0])
+        except Exception as e:
+            LOG.error('Cannot find any service of type: ' + svc_kind.keys()[0])
+            raise e
 
         try:
-            svc = keystone.services.find(type=svc_kind.keys()[0])
-            svc_ep = keystone.endpoints.find(service_id=svc.id)
+            svc_one = svc[0]
+            svc_ep = keystone.endpoints.find(service_id=svc_one.id)
         except Exception as e:
             LOG.error('Cannot find the service endpoint of: ' + svc_kind.__repr__())
             raise e
 
-        u = urlparse(svc_ep.publicurl)
+        if svc_ep is not None:
+            u = urlparse(svc_ep.publicurl)
 
-        # sort out the OCCI QI path
-        if u.path == '/':
-            svc_ep.publicurl += '-/'
-        elif u.path == '':
-            svc_ep.publicurl += '/-/'
+            # sort out the OCCI QI path
+            if u.path == '/':
+                svc_ep.publicurl += '-/'
+            elif u.path == '':
+                svc_ep.publicurl += '/-/'
+            else:
+                LOG.warn('Service endpoint URL does not look like it will work: ' + svc_ep.publicurl.__repr__())
+                svc_ep.publicurl = u.scheme + '://' + u.netloc + '/-/'
+                LOG.warn('Trying with the scheme and net location: ' + svc_ep.publicurl.__repr__())
+
+            heads = {'X-Auth-Token': self.token, 'X-Tenant-Name': self.tenant_name, 'Accept': 'application/occi+json'}
+
+            try:
+                r = requests.get(svc_ep.publicurl, headers=heads)
+                r.raise_for_status()
+            except requests.HTTPError as err:
+                LOG.error('HTTP Error: should do something more here!' + err.message)
+                raise err
+
+            registry = json.loads(r.content)
+
+            category = None
+            for cat in registry:
+                if 'related' in cat:
+                    category = cat
+
+            return Kind(scheme=category['scheme'], term=category['term'], related=category['related'],
+                        title=category['title'], attributes=category['attributes'], location=category['location'])
         else:
-            LOG.warn('Service endpoint URL does not look like it will work: ' + svc_ep.publicurl.__repr__())
-            svc_ep.publicurl = u.scheme + '://' + u.netloc + '/-/'
-            LOG.warn('Trying with the scheme and net location: ' + svc_ep.publicurl.__repr__())
-
-        heads = {'X-Auth-Token': self.token, 'X-Tenant-Name': self.tenant_name, 'Accept': 'application/occi+json'}
-
-        try:
-            r = requests.get(svc_ep.publicurl, headers=heads)
-            r.raise_for_status()
-        except requests.HTTPError as err:
-            LOG.error('HTTP Error: should do something more here!' + err.message)
-            raise err
-
-        registry = json.loads(r.content)
-
-        category = None
-        for cat in registry:
-            if 'related' in cat:
-                category = cat
-
-        return Kind(scheme=category['scheme'], term=category['term'], related=category['related'],
-                    title=category['title'], attributes=category['attributes'], location=category['location'])
+            # Do not proceed if no servcie has been found!
+            LOG.error('Service resolution failed for service ' + svc_kind.keys()[0])
 
     def get_dependencies(self):
         dependent_kinds = []
@@ -375,6 +405,8 @@ class Service:
 
         svc_scheme = self.stg['service_type'].split('#')[0] + '#'
         svc_term = self.stg['service_type'].split('#')[1]
+        # svc_child_type = self.stg['service_child_type'].split('#')[0] + '#'
+        # removed the required occi kinds from the category/related section - to be tested
 
         return Kind(
             scheme=svc_scheme,

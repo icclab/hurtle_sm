@@ -20,6 +20,7 @@ import time
 import threading
 
 import requests
+from placement import Placement
 
 from sdk import services
 
@@ -29,7 +30,7 @@ if os.path.exists('/app'):
 else:
     HERE = os.path.dirname(os.path.abspath(__file__)) + '/../'
 BUNDLE_DIR = os.environ.get('OPENSHIFT_REPO_DIR', HERE)
-STG_FILE = 'service_manifest.json'
+STG_FILE = 'service_manifest_composed.json'
 
 
 def config_logger(log_level=logging.DEBUG):
@@ -124,28 +125,38 @@ class Resolver:
 
         for svc_type in svc_list:
             if isinstance(svc_type, dict):  # or isinstance(svc_type, unicode):
+                svc_name = svc_type.keys()[0]
                 # XXX if there are more than two keys this will be a prob
                 # XXX note that currently all services must be RegionOne (default in heat)
-                region = 'RegionOne'
-                ep = services.get_service_endpoint(svc_type.keys()[0], self.token, tenant_name=self.tenant,
-                                                   region=region)
-                if ep is None:
-                    raise RuntimeError(svc_type.keys()[0] + ' endpoint could not be found - is the service registered?')
-                LOG.info('Service type: ' + svc_type.keys()[0].__repr__() + ' can be instantiated at: ' + ep)
+                # ops = services.get_service_endpoint(svc_type.keys()[0], self.token, tenant_name=self.tenant)
+                ops = services.get_service_endpoint(svc_type.keys()[0], self.token, tenant_name=self.tenant, allow_multiple=True)
 
-                inputs = svc_type[svc_type.keys()[0]]['inputs']
+                if len(ops) == 0:
+                    raise RuntimeError(svc_type.keys()[0] + ' endpoint could not be found - is the service registered?')
+                LOG.info('Service type: ' + svc_type.keys()[0].__repr__() + ' can be instantiated.')
+
+                inputs = svc_type[svc_name]['inputs']
                 type_ep = {
-                    svc_type.keys()[0]: {
+                    svc_name: {
                         'inputs': inputs,
-                        'endpoint': ep
+                        'endpoint': ops
                     }
                 }
                 svc_type_endpoint.append(type_ep)
             else:
                 LOG.error('Service type schema is now as expected. It is: ' + svc_type.__repr__())
                 raise RuntimeError('Service type schema is now as expected. It is: ' + svc_type.__repr__())
+        # now in svc_type_endpoint is a list of type_ep which all have multiple endpoints
+        # Placement logic below
 
+        svc_type_endpoint = self.__place_services(svc_type_endpoint)
+
+        # at this state each type_ep[svc_name]['endpoint'] must be a string with the final url
         return svc_type_endpoint
+
+    def __place_services(self, svc_type_endpoint):
+        plc = Placement(self.token, self.tenant)
+        return plc.place_services(svc_type_endpoint)
 
     def deploy(self):
         self.di = DeployInitialiser(tenant=self.tenant, token=self.token, stg=self.stg,
@@ -377,9 +388,14 @@ class ProvisionInitialiser(threading.Thread):
         svc_params = []
         for req in self.stg['depends_on']:
             if req.keys()[0] == svc_type:
-                for y in req[req.keys()[0]]['inputs']:
+                # inputs now a dict
+                # for y in req[req.keys()[0]]['inputs']:
+                for y in req[req.keys()[0]]['inputs'].keys():
                     supply_service = y.split('#')
-                    svc_params.append({supply_service[0] + '#' + supply_service[1]: supply_service[2]})
+                    svc_params.append(
+                        {supply_service[0] + '#' + supply_service[1]: supply_service[2],
+                         supply_service[2]: req[req.keys()[0]]['inputs'][y]}
+                    )
         # remove duplicate dicts from the list
         result = [dict(tupleized) for tupleized in set(tuple(item.items()) for item in svc_params)]
         # results contain the service type from where the attribute value can be found
