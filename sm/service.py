@@ -185,21 +185,26 @@ class MApplication(Application):
         if not auth.verify(token=token, tenant_name=tenant):
             raise HTTPError(401, 'Token is not valid. You likely need an updated token.')
 
-        _register_cost(self)
-        _register_location(self)
+        # Needs to provide cost and location to use this service later as part of placement optimization
+        cost = CONFIG.get('service_manager', 'cost', None)
+        location = CONFIG.get('service_manager', 'location', None)
+        if cost is not None and location is not None:
+            LOG.debug("Registering Mixins for Cost and Location of the service.")
+            _register_cost(self, cost)
+            _register_location(self, location)
 
         return self._call_occi(environ, response, token=token, tenant_name=tenant, registry=self.registry)
 
-def _register_cost(app):
+def _register_cost(app, cost):
      # cost value mixin
-    cost = CONFIG.get('service_manager', 'cost', "10")
+    # cost = CONFIG.get('service_manager', 'cost', "10")
     res_temp = occi_ext.CostTemplate("http://schemas.mobile-cloud-networking.eu/occi/sm/cost#", cost,
                                     related=[occi_ext.COST_TEMPLATE])
     app.register_backend(res_temp, MIXIN_BACKEND)
 
-def _register_location(app):
+def _register_location(app, location):
      # location value mixin
-    location = CONFIG.get('service_manager', 'location', "bart.cloudcomplab.ch")
+    # location = CONFIG.get('service_manager', 'location', "bart.cloudcomplab.ch")
     res_temp = occi_ext.LocationTemplate("http://schemas.mobile-cloud-networking.eu/occi/sm/location#", location,
                                     related=[occi_ext.LOCATION_TEMPLATE])
     app.register_backend(res_temp, MIXIN_BACKEND)

@@ -114,49 +114,72 @@ class Resolver:
         try:
             stg_deps = self.stg['depends_on']
             # XXX Note this operation is a network-based operation and could take > 30 secs
-            self.stg['depends_on'] = self.__sm_stg_ops(stg_deps)
+
+            optimize_for = None
+            if "optimize_for" in self.stg and (self.stg["optimize_for"] == "min_cost" or self.stg["optimize_for"] == "max_cost"):
+                optimize_for = self.stg["optimize_for"]
+
+            self.stg['depends_on'] = self.__sm_stg_ops(stg_deps, optimize_for)
         except KeyError:
             LOG.info('No service dependencies found in service manifest.')
             self.stg['depends_on'] = []
 
-    def __sm_stg_ops(self, svc_list):
+    def __sm_stg_ops(self, svc_list, optimize_for):
         # purpose: take the stg and insert valid SM endpoints, maintain the input params of service
         svc_type_endpoint = []
 
         for svc_type in svc_list:
             if isinstance(svc_type, dict):  # or isinstance(svc_type, unicode):
                 svc_name = svc_type.keys()[0]
-                # XXX if there are more than two keys this will be a prob
-                # XXX note that currently all services must be RegionOne (default in heat)
-                # ops = services.get_service_endpoint(svc_type.keys()[0], self.token, tenant_name=self.tenant)
-                ops = services.get_service_endpoint(svc_type.keys()[0], self.token, tenant_name=self.tenant, allow_multiple=True)
+                # breakpoint if yes or no placement
+                if optimize_for is None:
+                    # XXX if there are more than two keys this will be a prob
+                    # XXX note that currently all services must be RegionOne (default in heat)
+                    region = 'RegionOne'
+                    ep = services.get_service_endpoint(svc_name, self.token, tenant_name=self.tenant,
+                                                       region=region)
+                    if ep is None:
+                        raise RuntimeError(svc_type.keys()[0] + ' endpoint could not be found - is the service registered?')
+                    LOG.info('Service type: ' + svc_type.keys()[0].__repr__() + ' can be instantiated at: ' + ep)
 
-                if len(ops) == 0:
-                    raise RuntimeError(svc_type.keys()[0] + ' endpoint could not be found - is the service registered?')
-                LOG.info('Service type: ' + svc_type.keys()[0].__repr__() + ' can be instantiated.')
-
-                inputs = svc_type[svc_name]['inputs']
-                type_ep = {
-                    svc_name: {
-                        'inputs': inputs,
-                        'endpoint': ops
+                    inputs = svc_type[svc_name]['inputs']
+                    type_ep = {
+                        svc_name: {
+                            'inputs': inputs,
+                            'endpoint': ep
+                        }
                     }
-                }
-                svc_type_endpoint.append(type_ep)
+                    svc_type_endpoint.append(type_ep)
+                else:
+                    ops = services.get_service_endpoint(svc_name, self.token, tenant_name=self.tenant, allow_multiple=True)
+                    # cannot deploy from stg from old version ( check type of old version )
+                    if ops is None or len(ops) == 0:
+                        raise RuntimeError(svc_type.keys()[0] + ' endpoint could not be found - is the service registered?')
+                    LOG.info('Service type: ' + svc_type.keys()[0].__repr__() + ' can be instantiated.')
+
+                    inputs = svc_type[svc_name]['inputs']
+                    type_ep = {
+                        svc_name: {
+                            'inputs': inputs,
+                            'endpoint': ops
+                        }
+                    }
+                    svc_type_endpoint.append(type_ep)
             else:
                 LOG.error('Service type schema is now as expected. It is: ' + svc_type.__repr__())
                 raise RuntimeError('Service type schema is now as expected. It is: ' + svc_type.__repr__())
-        # now in svc_type_endpoint is a list of type_ep which all have multiple endpoints
-        # Placement logic below
 
-        svc_type_endpoint = self.__place_services(svc_type_endpoint)
+        # Placement logic below
+        if optimize_for is not None:
+            # now in svc_type_endpoint is a list of type_ep which all have multiple endpoints
+            svc_type_endpoint = self.__place_services(svc_type_endpoint, optimize_for)
 
         # at this state each type_ep[svc_name]['endpoint'] must be a string with the final url
         return svc_type_endpoint
 
-    def __place_services(self, svc_type_endpoint):
+    def __place_services(self, svc_type_endpoint, optimize_for):
         plc = Placement(self.token, self.tenant)
-        return plc.place_services(svc_type_endpoint)
+        return plc.place_services(svc_type_endpoint, optimize_for)
 
     def deploy(self):
         self.di = DeployInitialiser(tenant=self.tenant, token=self.token, stg=self.stg,
@@ -386,16 +409,35 @@ class ProvisionInitialiser(threading.Thread):
 
     def __get_param_svc_type(self, svc_type):
         svc_params = []
+        format_dict = None
         for req in self.stg['depends_on']:
             if req.keys()[0] == svc_type:
-                # inputs now a dict
-                # for y in req[req.keys()[0]]['inputs']:
-                for y in req[req.keys()[0]]['inputs'].keys():
-                    supply_service = y.split('#')
-                    svc_params.append(
-                        {supply_service[0] + '#' + supply_service[1]: supply_service[2],
-                         supply_service[2]: req[req.keys()[0]]['inputs'][y]}
-                    )
+                if isinstance(req[req.keys()[0]]['inputs'], dict):
+                    LOG.debug("New format of inputs provided as dict detected in service manifest.")
+                    if format_dict is None:
+                        format_dict = True
+                    if format_dict is False:
+                        LOG.fatal("Mixing new and old formats between service types for depends_on.")
+                        raise RuntimeError("Mixing new and old formats between service types for depends_on.")
+                    # inputs now a dict
+                    for y in req[req.keys()[0]]['inputs'].keys():
+                        supply_service = y.split('#')
+                        svc_params.append(
+                            {supply_service[0] + '#' + supply_service[1]: supply_service[2],
+                             supply_service[2]: req[req.keys()[0]]['inputs'][y]}
+                        )
+                else:
+                    if format_dict is None:
+                        format_dict = False
+                    if format_dict is True:
+                        LOG.fatal("Mixing new and old formats between service types for depends_on.")
+                        raise RuntimeError("Mixing new and old formats between service types for depends_on.")
+                    if "optimize_for" in self.stg:
+                        LOG.fatal("Service Manifest indicates placement optimization, but inputs provided as list and not dict.")
+                        raise RuntimeError("Service Manifest indicates placement optimization, but inputs provided as list and not dict.")
+                    for y in req[req.keys()[0]]['inputs']:
+                        supply_service = y.split('#')
+                        svc_params.append({supply_service[0] + '#' + supply_service[1]: supply_service[2]})
         # remove duplicate dicts from the list
         result = [dict(tupleized) for tupleized in set(tuple(item.items()) for item in svc_params)]
         # results contain the service type from where the attribute value can be found

@@ -9,6 +9,17 @@ from ortools.constraint_solver import pywrapcp
 
 import json
 import requests
+import logging
+
+def config_logger(log_level=logging.DEBUG):
+    logging.basicConfig(format='%(threadName)s \t %(levelname)s %(asctime)s: \t%(message)s',
+                        datefmt='%m/%d/%Y %I:%M:%S %p',
+                        log_level=log_level)
+    logger = logging.getLogger(__name__)
+    logger.setLevel(log_level)
+    return logger
+
+LOG = config_logger()
 
 # data
 latencies = {"bart.cloudcomplab.ch_bart.cloudcomplab.ch": 1,
@@ -24,8 +35,7 @@ class Placement(object):
         self.token = token
         self.tenant = tenant
 
-    def place_services(self, svc_type_endpoint):
-
+    def place_services(self, svc_type_endpoint, optimize_for):
 
         for svc_endpoint in svc_type_endpoint:
             service = {}
@@ -33,6 +43,9 @@ class Placement(object):
             svc_name = svc_endpoint.keys()[0]
             namespace = svc_name.split('#')[0]
             svc_term = svc_name.split('#')[1]
+
+            LOG.debug("Placement service placing service type: " + str(svc_term))
+
             service["name"] = svc_term
             service["service"] = {}
             updated_endpoints = []
@@ -69,11 +82,15 @@ class Placement(object):
             service_structure.append(service)
 
         # service stucture ready to be used by solver
-        services_to_place = self.__run_placement(service_structure)
+        services_to_place = self.__run_placement(service_structure, optimize_for)
         for svc_type in svc_type_endpoint:
             svc_name = svc_type.keys()[0]
             svc_term = svc_name.split('#')[1]
             svc_type[svc_name]['endpoint'] = services_to_place[svc_term]
+            LOG.debug("Placing service " + svc_term + " on endpoint: " + services_to_place[svc_term])
+
+        LOG.debug("Services placement completed.")
+        # for service in
 
         return svc_type_endpoint
 
@@ -82,6 +99,8 @@ class Placement(object):
                    'X-Tenant-Name': self.tenant,
                    'Content-Type': 'text/occi',
                    'Accept': 'application/occi+json'}
+
+        LOG.debug("Requesting registered Categories for service: " + svc_term + " at endpoint: " + svc_endpoint)
 
         url = svc_endpoint + '/-/'
         r = requests.get(url, headers=headers)
@@ -104,13 +123,16 @@ class Placement(object):
         if not svc_dc or not svc_cost:
             raise RuntimeError("Could not find service attributes for service: " + svc_term)
 
+        LOG.debug("Service " + svc_term + " endpoint at location: " + svc_endpoint +
+                  " has cost: " + svc_cost + " and dc: " + svc_dc)
+
         svc_placement_data = {'dc': svc_dc, 'cost': svc_cost}
 
 
         return svc_placement_data
 
     @staticmethod
-    def __run_placement(services_to_place):
+    def __run_placement(services_to_place, optimize_for):
         solver = pywrapcp.Solver('RunPlacement')
         x = []
         prices = []
@@ -159,13 +181,19 @@ class Placement(object):
 
         # Iterates through the solutions, displaying each.
         solution = None
-        min_cost = None
+        current_cost = None
         while solver.NextSolution():
             placed = [y for y in x if y.Value() == 1]
             cost = sum([x[i].Value() * int(prices[i]) for i in range(0, len(prices))])
-            if min_cost is None or min_cost > cost:
-                min_cost = cost
-                solution = placed
+            # optimize for cost yes / no as a variable
+            if optimize_for == "min_cost":
+                if current_cost is None or current_cost > cost:
+                    current_cost = cost
+                    solution = placed
+            elif optimize_for == "max_cost":
+                if current_cost is None or current_cost < cost:
+                    current_cost = cost
+                    solution = placed
 
         solver.EndSearch()
 
