@@ -107,6 +107,7 @@ class Placement(object):
         rjson = json.loads(r.text)
         svc_attrs = None
         svc_cost = None
+        svc_dc = None
         for svc_category in rjson:
             # if svc_category.get('term') == svc_term:
             #     svc_attrs = svc_category.get('attributes')

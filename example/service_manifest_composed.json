@@ -1,0 +1,28 @@
+{
+    "service_type": "http://schemas.mobile-cloud-networking.eu/occi/sm#placement_type1_1",
+    "service_description": "Test sample service 1_1",
+    "service_attributes": {
+        "mcn.endpoint.p3": "immutable",
+        "mcn.endpoint.p4": "immutable"
+    },
+    "optimize_for": "max_cost",
+    "service_endpoint": "http://160.85.4.68:8889/placement_type1_1/",
+    "depends_on": [
+      {
+        "http://schemas.mobile-cloud-networking.eu/occi/sm#placement_type1_2": {
+          "inputs": {
+            "http://schemas.mobile-cloud-networking.eu/occi/sm#latency.placement_type1_3": 60,
+            "http://schemas.mobile-cloud-networking.eu/occi/sm#latency.placement_type1_4": 70
+          }
+        }
+      },
+      {
+        "http://schemas.mobile-cloud-networking.eu/occi/sm#placement_type1_3": {
+          "inputs": {
+            "http://schemas.mobile-cloud-networking.eu/occi/sm#latency.placement_type1_4": 80
+          }
+        }
+      },
+    { "http://schemas.mobile-cloud-networking.eu/occi/sm#placement_type1_4": { "inputs": [] } }
+]
+}

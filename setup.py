@@ -38,6 +38,8 @@ setup(
         'ecdsa',
         'jsonpickle',
         'python-keystoneclient',
-        'pymongo'],
+        'pymongo',
+        'google-apputils',
+        'ortools'],
     scripts=['bin/service_manager']
 )
