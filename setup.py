@@ -39,7 +39,6 @@ setup(
         'jsonpickle',
         'python-keystoneclient',
         'pymongo',
-        'google-apputils',
-        'ortools'],
+        'google-apputils'],
     scripts=['bin/service_manager']
 )
