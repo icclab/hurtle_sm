@@ -24,7 +24,7 @@ setup(
     author_email='edmo@zhaw.ch',
     url='http://blog.zhaw.ch/icclab',
     license='Apache 2.0',
-    packages=['sm', 'sm.so'],
+    packages=['sm', 'sm.so', 'sm.managers'],
     install_requires=[
         'pyssf',
         'requests',
