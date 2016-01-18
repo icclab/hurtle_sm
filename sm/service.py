@@ -159,6 +159,14 @@ class MApplication(Application):
         super(MApplication, self).__init__(reg)
 
         self.register_backend(Link.kind, KindBackend())
+        # Needs to provide cost and location to use this service later as part of placement optimization
+
+        cost = CONFIG.get('service_manager', 'cost', None)
+        location = CONFIG.get('service_manager', 'location', None)
+        if cost is not None and location is not None:
+            LOG.debug("Registering Mixins for Cost and Location of the service.")
+            _register_cost(self, cost)
+            _register_location(self, location)
 
     def register_backend(self, category, backend):
         return super(MApplication, self).register_backend(category, backend)
@@ -184,14 +192,6 @@ class MApplication(Application):
         auth = KeyStoneAuthService(design_uri)
         if not auth.verify(token=token, tenant_name=tenant):
             raise HTTPError(401, 'Token is not valid. You likely need an updated token.')
-
-        # Needs to provide cost and location to use this service later as part of placement optimization
-        cost = CONFIG.get('service_manager', 'cost', None)
-        location = CONFIG.get('service_manager', 'location', None)
-        if cost is not None and location is not None:
-            LOG.debug("Registering Mixins for Cost and Location of the service.")
-            _register_cost(self, cost)
-            _register_location(self, location)
 
         return self._call_occi(environ, response, token=token, tenant_name=tenant, registry=self.registry)
 
