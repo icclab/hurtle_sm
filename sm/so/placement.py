@@ -6,7 +6,6 @@ from ortools.linear_solver import pywraplp
 from sdk import services
 from google.apputils import app
 from ortools.constraint_solver import pywrapcp
-from sm.config import CONFIG, CONFIG_PATH
 
 import json
 import requests
@@ -23,13 +22,6 @@ def config_logger(log_level=logging.DEBUG):
 LOG = config_logger()
 
 # data
-lat_path = CONFIG.get("service_manager", "dc_lats", None)
-latencies = None
-if lat_path is not None:
-    with open(lat_path) as dc_lats_file:
-        latencies = json.load(dc_lats_file)
-if latencies is None:
-    raise RuntimeError("Latencies between DC files not provided - Placement decision impossible.")
 # latencies = {"bart.cloudcomplab.ch_bart.cloudcomplab.ch": 1,
 #              "cloudsigma.com_cloudsigma.com": 1,
 #              "bart.cloudcomplab.ch_cloudsigma.com": 50,
@@ -39,9 +31,10 @@ if latencies is None:
 
 
 class Placement(object):
-    def __init__(self, token, tenant):
+    def __init__(self, token, tenant, dc_lats):
         self.token = token
         self.tenant = tenant
+        self.latencies = dc_lats
 
     def place_services(self, svc_type_endpoint, optimize_for):
 
@@ -140,8 +133,7 @@ class Placement(object):
 
         return svc_placement_data
 
-    @staticmethod
-    def __run_placement(services_to_place, optimize_for):
+    def __run_placement(self, services_to_place, optimize_for):
         solver = pywrapcp.Solver('RunPlacement')
         x = []
         prices = []
@@ -173,7 +165,7 @@ class Placement(object):
                         # multiply the placement variables with the latency across DCs
                         dest_dc = dest_plc["dc"]
                         solver.Add(((svc_vars[src_svc["name"] + "_" + src_dc]["var"] *
-                                     svc_vars[dest_svc["name"] + "_" + dest_dc]["var"]) * latencies[
+                                     svc_vars[dest_svc["name"] + "_" + dest_dc]["var"]) * self.latencies[
                                         src_dc + "_" + dest_dc]) <= svc_lat["max"] * 2)
 
 

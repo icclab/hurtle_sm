@@ -30,7 +30,8 @@ if os.path.exists('/app'):
 else:
     HERE = os.path.dirname(os.path.abspath(__file__)) + '/../'
 BUNDLE_DIR = os.environ.get('OPENSHIFT_REPO_DIR', HERE)
-STG_FILE = 'service_manifest_composed.json'
+STG_FILE = 'service_manifest.json'
+DC_LATS = 'dc_lats.json'
 
 
 def config_logger(log_level=logging.DEBUG):
@@ -172,13 +173,15 @@ class Resolver:
         # Placement logic below
         if optimize_for is not None:
             # now in svc_type_endpoint is a list of type_ep which all have multiple endpoints
-            svc_type_endpoint = self.__place_services(svc_type_endpoint, optimize_for)
+            with open(os.path.join(BUNDLE_DIR, 'data', DC_LATS)) as stg_content:
+                dc_lats = json.load(stg_content)
+            svc_type_endpoint = self.__place_services(svc_type_endpoint, optimize_for, dc_lats)
 
         # at this state each type_ep[svc_name]['endpoint'] must be a string with the final url
         return svc_type_endpoint
 
-    def __place_services(self, svc_type_endpoint, optimize_for):
-        plc = Placement(self.token, self.tenant)
+    def __place_services(self, svc_type_endpoint, optimize_for, dc_lats):
+        plc = Placement(self.token, self.tenant, dc_lats)
         return plc.place_services(svc_type_endpoint, optimize_for)
 
     def deploy(self):
