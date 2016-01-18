@@ -6,6 +6,7 @@ from ortools.linear_solver import pywraplp
 from sdk import services
 from google.apputils import app
 from ortools.constraint_solver import pywrapcp
+from sm.config import CONFIG, CONFIG_PATH
 
 import json
 import requests
@@ -22,10 +23,17 @@ def config_logger(log_level=logging.DEBUG):
 LOG = config_logger()
 
 # data
-latencies = {"bart.cloudcomplab.ch_bart.cloudcomplab.ch": 1,
-             "cloudsigma.com_cloudsigma.com": 1,
-             "bart.cloudcomplab.ch_cloudsigma.com": 50,
-             "cloudsigma.com_bart.cloudcomplab.ch": 50}
+lat_path = CONFIG.get("service_manager", "dc_lats", None)
+latencies = None
+if lat_path is not None:
+    with open(lat_path) as dc_lats_file:
+        latencies = json.load(dc_lats_file)
+if latencies is None:
+    raise RuntimeError("Latencies between DC files not provided - Placement decision impossible.")
+# latencies = {"bart.cloudcomplab.ch_bart.cloudcomplab.ch": 1,
+#              "cloudsigma.com_cloudsigma.com": 1,
+#              "bart.cloudcomplab.ch_cloudsigma.com": 50,
+#              "cloudsigma.com_bart.cloudcomplab.ch": 50}
 
 # matrix: source_dest
 
