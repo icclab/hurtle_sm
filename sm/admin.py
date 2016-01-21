@@ -20,16 +20,17 @@ so_buildconfig_name = stg['service_type'].split('#')[1].replace('_', '-')
 service_shema = stg['service_type']
 sm_name = service_shema.split('#')[1]
 
+if 'cloud_controller' in CONFIG.sections():
+    cc_url = CONFIG.get('cloud_controller', 'nb_api', False)
+    cc_admin_url = CONFIG.get('cloud_controller', 'nb_admin_api', False)
+else:
+    cc_url = False
+    cc_admin_url = False
 
-cc_url = CONFIG.get('cloud_controller', 'nb_api', False)
-if not cc_url:
-    raise RuntimeError('No Cloud Controller specified in the configuration file.')
-cc_admin_url = CONFIG.get('cloud_controller', 'nb_admin_api', False)
-if not cc_admin_url:
-    raise RuntimeError('No Cloud Controller Admin URL specified in the configuration file.')
-db_host = CONFIG.get('mongo', 'host', False)
-if not db_host:
-    raise RuntimeError('No MongoDB host specified in the configuration file.')
+if 'mongo' in CONFIG.sections():
+    db_host = CONFIG.get('mongo', 'host', False)
+else:
+    db_host = False
 
 
 def print_response(response):
@@ -116,4 +117,19 @@ def update(name):
 
 
 def server(host, port):
-    app.run(host=host, port=port, debug=False)
+    all_ok = True
+    if not cc_url:
+        all_ok = False
+        print 'WARNING: No Cloud Controller specified in the configuration file.'
+    if not cc_admin_url:
+        all_ok = False
+        print 'WARNING: No Cloud Controller Admin URL specified in the configuration file.'
+    if not db_host:
+        all_ok = False
+        print 'WARNING: No MongoDB host specified in the configuration file.'
+
+    if all_ok:
+        print 'Admin API listening on %s:%i' % (host, port)
+        app.run(host=host, port=port, debug=False)
+    else:
+        print 'WARNING: will not start Admin API!'
