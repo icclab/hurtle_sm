@@ -1,0 +1,16 @@
+pyssf
+requests
+mako
+retrying
+tornado
+graypy
+debtcollector
+monotonic
+pycrypto
+ecdsa
+jsonpickle
+python-keystoneclient
+python-heatclient
+pymongo
+flask
+https://dl.dropboxusercontent.com/u/165239/mcn_cc_sdk.tgz
