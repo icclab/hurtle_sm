@@ -16,6 +16,7 @@
 
 import requests
 from retrying import retry
+import os
 
 from config import CONFIG
 from log import LOG
@@ -64,8 +65,11 @@ def http_retriable_request(verb, url, headers={}, authenticate=False, params={})
 
     auth = ()
     if authenticate:
-        user = CONFIG.get('cloud_controller', 'user')
-        pwd = CONFIG.get('cloud_controller', 'pwd')
+        cfg_user = CONFIG.get('cloud_controller', 'user')
+        user = os.environ.get('CC_USER', cfg_user)
+        cfg_pwd = CONFIG.get('cloud_controller', 'pwd')
+        pwd = os.environ.get('CC_PASSWORD', cfg_pwd)
+
         auth = (user, pwd)
 
     if verb in ['POST', 'DELETE', 'GET', 'PUT']:
