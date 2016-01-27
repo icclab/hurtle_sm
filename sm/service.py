@@ -306,11 +306,11 @@ class Service:
                      'Service port number (' + str(up.port) + ') is taken from the service manifest')
 
         if self.DEBUG:
-            LOG.debug('Using WSGI reference implementation')
-            httpd = make_server('', int(up.port), self.app)
+            LOG.debug('Using WSGI reference implementation, listening on 0.0.0.0:%s' % str(up.port))
+            httpd = make_server('0.0.0.0', int(up.port), self.app)
             httpd.serve_forever()
         else:
-            LOG.debug('Using tornado implementation')
+            LOG.debug('Using tornado implementation, listening on 0.0.0.0:%s' % str(up.port))
             container = wsgi.WSGIContainer(self.app)
             http_server = httpserver.HTTPServer(container)
             http_server.listen(int(up.port))

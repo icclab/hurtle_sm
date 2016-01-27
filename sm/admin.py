@@ -24,7 +24,7 @@ sm_name = service_shema.split('#')[1]
 cc_url = os.environ.get('CC_URL', False)
 cc_admin_url = os.environ.get('CC_ADMIN_URL', False)
 service_name = stg['service_type'].split('#')[1].replace('-', '_')
-print 'getting mongo connection details via env: %s_MONGO_SERVICE_HOST & %s_MONGO_SERVICE_PORT' % (service_name, service_name)
+print 'getting mongo connection details via env: %s_MONGO_SERVICE_HOST & %s_MONGO_SERVICE_PORT' % (service_name.upper(), service_name.upper())
 
 #SAMPLE_SM_MONGO_SERVICE_HOST
 #SAMPLE_SM_MONGO_SERVICE_PORT
@@ -120,13 +120,13 @@ def server(host, port):
     all_ok = True
     if not cc_url:
         all_ok = False
-        print 'WARNING: No Cloud Controller specified in the configuration file.'
+        print 'WARNING: No Cloud Controller specified.'
     if not cc_admin_url:
         all_ok = False
-        print 'WARNING: No Cloud Controller Admin URL specified in the configuration file.'
+        print 'WARNING: No Cloud Controller Admin URL.'
     if not db_host:
         all_ok = False
-        print 'WARNING: No MongoDB host specified in the configuration file.'
+        print 'WARNING: No MongoDB host specified.'
 
     if all_ok:
         print 'Admin API listening on %s:%i' % (host, port)
