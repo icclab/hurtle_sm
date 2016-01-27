@@ -23,13 +23,12 @@ sm_name = service_shema.split('#')[1]
 
 cc_url = os.environ.get('CC_URL', False)
 cc_admin_url = os.environ.get('CC_ADMIN_URL', False)
-service_name = stg['service_type'].split('#')[1].replace('-', '_')
-print 'getting mongo connection details via env: %s_MONGO_SERVICE_HOST & %s_MONGO_SERVICE_PORT' % (service_name.upper(), service_name.upper())
-
-#SAMPLE_SM_MONGO_SERVICE_HOST
-#SAMPLE_SM_MONGO_SERVICE_PORT
-db_host = os.environ.get(service_name + '_SERVICE_HOST')
-db_port = os.environ.get(service_name + '_SERVICE_PORT')
+mongo_service_name = os.environ.get('MONGO_SERVICE_NAME', 'SAMPLE_SM')
+db_host_key = service_name + '_SERVICE_HOST'
+db_port_key = service_name + '_SERVICE_PORT'
+print 'getting mongo connection details via env: %s & %s' % (db_host_key, db_port_key)
+db_host = os.environ.get(db_host_key)
+db_port = os.environ.get(db_port_key)
 print 'resolved mongo host to %s:%s' % (db_host, db_port)
 
 
