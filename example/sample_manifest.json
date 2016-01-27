@@ -5,6 +5,6 @@
         "mcn.endpoint.p3": "immutable",
         "mcn.endpoint.p4": "immutable"
     },
-    "service_endpoint": "http://localhost:8889/sample_so/",
+    "service_endpoint": "http://localhost:8080/sample_so/",
     "depends_on": []
 }
