@@ -7,6 +7,10 @@ import os
 from pymongo import MongoClient
 from sm.config import CONFIG, CONFIG_PATH
 
+import sys
+sys.stdout = sys.stderr
+
+
 app = Flask('hurtle-sm')
 
 print 'Using CONFIG_PATH %s' % CONFIG_PATH
@@ -19,13 +23,12 @@ with open(stg_path) as stg_content:
 so_buildconfig_name = stg['service_type'].split('#')[1].replace('_', '-')
 
 service_shema = stg['service_type']
-sm_name = service_shema.split('#')[1]
+sm_name = os.environ.get('SM_NAME', 'SAMPLE_SM')
 
 cc_url = os.environ.get('CC_URL', False)
 cc_admin_url = os.environ.get('CC_ADMIN_URL', False)
-mongo_service_name = os.environ.get('MONGO_SERVICE_NAME', 'SAMPLE_SM')
-db_host_key = mongo_service_name + '_SERVICE_HOST'
-db_port_key = mongo_service_name + '_SERVICE_PORT'
+db_host_key = sm_name + '_SERVICE_HOST'
+db_port_key = sm_name + '_SERVICE_PORT'
 print 'getting mongo connection details via env: %s & %s' % (db_host_key, db_port_key)
 db_host = os.environ.get(db_host_key)
 db_port = os.environ.get(db_port_key)
