@@ -45,7 +45,9 @@ class InitSO(Task):
 
     def __init__(self, entity, extras):
         Task.__init__(self, entity, extras, state='initialise')
-        self.nburl = CONFIG.get('cloud_controller', 'nb_api', '')
+        self.nburl = os.environ.get('CC_URL', False)
+        if not self.nburl:
+            self.nburl = CONFIG.get('cloud_controller', 'nb_api', '')
         if self.nburl[-1] == '/':
             self.nburl = self.nburl[0:-1]
         LOG.info('CloudController Northbound API: ' + self.nburl)
@@ -850,7 +852,9 @@ class DestroySO(Task):
             self.host = urlparse(self.repo_uri).netloc.split('@')[1]
         elif self.entity.extras['ops_version'] == 'v3':
             self.host = self.entity.extras['loc']
-        self.nburl = CONFIG.get('cloud_controller', 'nb_api', '')
+        self.nburl = os.environ.get('CC_URL', False)
+        if not self.nburl:
+            self.nburl = CONFIG.get('cloud_controller', 'nb_api', '')
 
     def run(self):
         # 1. dispose the active SO, essentially kills the STG/ITG
