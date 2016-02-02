@@ -115,7 +115,9 @@ class InitSO(Task):
         elif self.entity.extras['ops_version'] == 'v3':
 
             # for OpSv3 bundle location is the repo id of the container image
-            bundle_loc = CONFIG.get('service_manager', 'bundle_location', '')
+            bundle_loc = os.environ.get('BUNDLE_LOC', False)
+            if not bundle_loc:
+                bundle_loc = CONFIG.get('service_manager', 'bundle_location', '')
             if bundle_loc == '':
                 LOG.error('No bundle_location parameter supplied in sm.cfg')
                 raise Exception('No bundle_location parameter supplied in sm.cfg')
@@ -365,7 +367,9 @@ class ActivateSO(Task):
         os.system(cmd)
 
         # Get the SO bundle
-        bundle_loc = CONFIG.get('service_manager', 'bundle_location', '')
+        bundle_loc = os.environ.get('BUNDLE_LOC', False)
+        if not bundle_loc:
+            bundle_loc = CONFIG.get('service_manager', 'bundle_location', '')
         if bundle_loc == '':
             raise Exception('No bundle_location parameter supplied in sm.cfg')
         LOG.debug('Bundle to add to repo: ' + bundle_loc)
