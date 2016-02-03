@@ -103,8 +103,8 @@ def update(name):
         if resources is not None:
             for key, resource in resources.iteritems():
                 base_url = resource['extras']['loc']
-                #todo: add -a for adminapi
-                url = 'http://%s/update/self' % base_url
+                admin_url = base_url.replace('.', '-a.', 1)
+                url = 'http://%s/update/self' % admin_url
                 urls.append(url)
                 print 'curl -v -X POST %s' % url
                 response = requests.post(url)
