@@ -27,8 +27,8 @@ sm_name = os.environ.get('SM_NAME', 'SAMPLE_SM')
 mongo_service_name = sm_name.upper().replace('-', '_')
 cc_url = os.environ.get('CC_URL', False)
 cc_admin_url = os.environ.get('CC_ADMIN_URL', False)
-db_host_key = mongo_service_name + '_SERVICE_HOST'
-db_port_key = mongo_service_name + '_SERVICE_PORT'
+db_host_key = mongo_service_name + '_MONGO_SERVICE_HOST'
+db_port_key = mongo_service_name + '_MONGO_SERVICE_PORT'
 print 'getting mongo connection details via env: %s & %s' % (db_host_key, db_port_key)
 db_host = os.environ.get(db_host_key)
 db_port = os.environ.get(db_port_key)
@@ -103,6 +103,7 @@ def update(name):
         if resources is not None:
             for key, resource in resources.iteritems():
                 base_url = resource['extras']['loc']
+                #todo: add -a for adminapi
                 url = 'http://%s/update/self' % base_url
                 urls.append(url)
                 print 'curl -v -X POST %s' % url
