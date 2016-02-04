@@ -15,6 +15,7 @@
 
 
 import json
+import os
 import requests
 import sys
 import signal
@@ -147,6 +148,19 @@ class MApplication(Application):
             mongo_addr = CONFIG.get('mongo', 'host', None)
         except NoSectionError:
             mongo_addr = None
+
+        sm_name = os.environ.get('SM_NAME', 'SAMPLE_SM')
+        mongo_service_name = sm_name.upper().replace('-', '_')
+
+        db_host_key = mongo_service_name + '_MONGO_SERVICE_HOST'
+        db_port_key = mongo_service_name + '_MONGO_SERVICE_PORT'
+        db_host = os.environ.get(db_host_key, False)
+        db_port = os.environ.get(db_port_key, False)
+        db_user = os.environ.get('DB_USER', False)
+        db_password = os.environ.get('DB_PASSWORD', False)
+
+        if db_host and db_port and db_user and db_password:
+            mongo_addr = 'mongodb://%s:%s@%s:%s' % (db_user, db_password, db_host, db_port)
 
         if mongo_addr is None:
             reg = SMRegistry()
