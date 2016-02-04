@@ -33,6 +33,8 @@ print 'getting mongo connection details via env: %s & %s' % (db_host_key, db_por
 db_host = os.environ.get(db_host_key)
 db_port = os.environ.get(db_port_key)
 print 'resolved mongo host to %s:%s' % (db_host, db_port)
+db_user = os.environ.get('DB_USER')
+db_password = os.environ.get('DB_PASSWORD')
 
 
 def print_response(response):
@@ -43,7 +45,8 @@ def print_response(response):
 
 
 def get_mongo_connection():
-    connection = MongoClient(db_host, int(db_port))
+    db_uri = 'mongodb://%s:%s@%s' % (db_user, db_password, db_host)
+    connection = MongoClient(db_uri, int(db_port))
     resources_db = connection.resources_db
     return resources_db.resource_coll
 
@@ -130,6 +133,12 @@ def server(host, port):
     if not db_host:
         all_ok = False
         print 'WARNING: No MongoDB host specified.'
+    if not db_user:
+        all_ok = False
+        print 'WARNING: No MongoDB user specified.'
+    if not db_password:
+        all_ok = False
+        print 'WARNING: No MongoDB password specified.'
 
     if all_ok:
         print 'Admin API listening on %s:%i' % (host, port)
