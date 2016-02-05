@@ -73,7 +73,7 @@ class SMRegistry(NonePersistentRegistry):
     def get_extras(self, extras):
         return extras['tenant_name']
 
-
+#TODO(somebody): replace mongo implementation with something that actually works
 class MongoRegistry(NonePersistentRegistry):
     def __init__(self, mongo_addr):
         if mongo_addr is not None:
