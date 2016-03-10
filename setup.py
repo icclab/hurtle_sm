@@ -38,6 +38,7 @@ setup(
         'ecdsa',
         'jsonpickle',
         'python-keystoneclient',
-        'pymongo'],
+        'pymongo',
+	'flask'],
     scripts=['bin/service_manager']
 )
