@@ -15,12 +15,17 @@
 
 
 from sm.managers.generic import Task
+from sm.config import CONFIG
 from sm.log import LOG
+from sm.retry_http import http_retriable_request
 import time
 import json
 
 __author__ = 'merne'
 
+obapi_addr = CONFIG.get('openbaton', 'host', None)
+obapi_port = CONFIG.get('openbaton', 'port', None)
+HTTP = 'http://' + obapi_addr + ':' + obapi_port
 
 class Init(Task):
 
@@ -71,6 +76,23 @@ class Activate(Task):
         self.entity.attributes['mcn.service.state'] = 'activate'
 
         # Do activate work here
+        LOG.debug('Activating the SO...')
+        url = HTTP + '/api/v1/occi/default'
+        heads = {
+            'Category': 'orchestrator; scheme="http://schemas.mobile-cloud-networking.eu/occi/service#"',
+            'Content-Type': 'text/occi',
+            'X-Auth-Token': self.extras['token'],
+            'X-Tenant-Name': self.extras['tenant_name'],
+        }
+
+        occi_attrs = self.extras['srv_prms'].service_parameters(self.state)
+        if len(occi_attrs) > 0:
+            LOG.info('Adding service-specific parameters to call... X-OCCI-Attribute: ' + occi_attrs)
+            heads['X-OCCI-Attribute'] = occi_attrs
+
+        LOG.debug('Initialising SO with: ' + url)
+        LOG.info('Sending headers: ' + heads.__repr__())
+        http_retriable_request('PUT', url, headers=heads)
 
         elapsed_time = time.time() - self.start_time
         infoDict = {
@@ -99,6 +121,27 @@ class Deploy(Task):
         self.entity.attributes['mcn.service.state'] = 'deploy'
 
         # Do deploy work here
+        url = HTTP + '/api/v1/occi/default'
+        params = {'action': 'deploy'}
+        heads = {
+            'Category': 'deploy; scheme="http://schemas.mobile-cloud-networking.eu/occi/service#"',
+            'Content-Type': 'text/occi',
+            'X-Auth-Token': self.extras['token'],
+            'X-Tenant-Name': self.extras['tenant_name']}
+        occi_attrs = self.extras['srv_prms'].service_parameters(self.state)
+        if len(occi_attrs) > 0:
+            LOG.info('Adding service-specific parameters to call... X-OCCI-Attribute:' + occi_attrs)
+            heads['X-OCCI-Attribute'] = occi_attrs
+        LOG.debug('Deploying SO with: ' + url)
+        LOG.info('Sending headers: ' + heads.__repr__())
+        http_retriable_request('POST', url, headers=heads, params=params)
+
+        # also sleep here to keep phases consistent during greenfield
+        while not self.deploy_complete(url):
+                    time.sleep(7)
+
+        self.entity.attributes['mcn.service.state'] = 'deploy'
+        LOG.debug('SO Deployed ')
 
         elapsed_time = time.time() - self.start_time
         infoDict = {
@@ -109,6 +152,30 @@ class Deploy(Task):
                     }
         LOG.debug(json.dumps(infoDict))
         return self.entity, self.extras
+
+    def deploy_complete(self, url):
+        heads = {
+            'Content-type': 'text/occi',
+            'Accept': 'application/occi+json',
+            'X-Auth-Token': self.extras['token'],
+            'X-Tenant-Name': self.extras['tenant_name'],
+        }
+
+        LOG.info('checking service state at: ' + url)
+        LOG.info('sending headers: ' + heads.__repr__())
+
+        r = http_retriable_request('GET', url, headers=heads)
+        rheaders = r.headers.get("x-occi-attribute").split(',')
+
+        for entry in rheaders:
+            if 'occi.stack.state' in entry:
+                stack_state = entry.split('"')[1]
+                if 'CREATE_COMPLETE' in entry or 'UPDATE_COMPLETE' in entry:
+                    LOG.info('Stack is ready')
+                    return True
+                else:
+                    LOG.info('Stack is not ready. Current state state: ' + stack_state)
+                    return False
 
 
 class Provision(Task):
@@ -153,9 +220,35 @@ class Retrieve(Task):
                     'response_time': 0,
                     }
         LOG.debug(json.dumps(infoDict))
-        self.entity.attributes['mcn.service.state'] = 'retrieve'
 
         # Do retrieve work here
+        if self.entity.attributes['mcn.service.state'] in ['activate',
+                                                           'deploy',
+                                                           'provision',
+                                                           'update']:
+            heads = {
+                'Content-Type': 'text/occi',
+                'Accept': 'text/occi',
+                'X-Auth-Token': self.extras['token'],
+                'X-Tenant-Name': self.extras['tenant_name']}
+            LOG.info('Getting state of service orchestrator with: ' +
+                     "localhost:8082" + '/api/v1/occidefault')
+            LOG.info('Sending headers: ' + heads.__repr__())
+            r = http_retriable_request('GET', HTTP +
+                                       '/api/v1/occi/default', headers=heads)
+
+            attrs = r.headers['x-occi-attribute'].split(', ')
+            for attr in attrs:
+                kv = attr.split('=')
+                if kv[0] != 'occi.core.id':
+                    if kv[1].startswith('"') and kv[1].endswith('"'):
+                        kv[1] = kv[1][1:-1]  # scrub off quotes
+                    self.entity.attributes[kv[0]] = kv[1]
+                    LOG.debug('OCCI Attribute: ' + kv[0] + ' --> ' + kv[1])
+
+        else:
+            LOG.debug('Cannot GET entity as it is not in the activated, '
+                      'deployed or provisioned, updated state')
 
         elapsed_time = time.time() - self.start_time
         infoDict = {
@@ -214,6 +307,18 @@ class Destroy(Task):
         self.entity.attributes['mcn.service.state'] = 'destroy'
 
         # Do destroy work here
+        url = HTTP + '/api/v1/occi/default'
+        heads = {'X-Auth-Token': self.extras['token'],
+                 'X-Tenant-Name': self.extras['tenant_name']}
+        occi_attrs = self.extras['srv_prms'].service_parameters(self.state)
+        if len(occi_attrs) > 0:
+            LOG.info('Adding service-specific parameters to call... '
+                     'X-OCCI-Attribute:' + occi_attrs)
+            heads['X-OCCI-Attribute'] = occi_attrs
+        LOG.info('Disposing service orchestrator with: ' + url)
+        LOG.info('Sending headers: ' + heads.__repr__())
+
+        http_retriable_request('DELETE', url, headers=heads)
 
         elapsed_time = time.time() - self.start_time
         infoDict = {
