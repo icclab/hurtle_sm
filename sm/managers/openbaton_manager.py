@@ -27,6 +27,7 @@ obapi_addr = CONFIG.get('openbaton', 'host', None)
 obapi_port = CONFIG.get('openbaton', 'port', None)
 HTTP = 'http://' + obapi_addr + ':' + obapi_port
 
+
 class Init(Task):
 
     def __init__(self, entity, extras):
@@ -34,29 +35,27 @@ class Init(Task):
 
     def run(self):
         self.start_time = time.time()
-        infoDict = {
+        infodict = {
                     'sm_name': self.entity.kind.term,
                     'phase': 'init',
                     'phase_event': 'start',
                     'response_time': 0,
                     }
-        LOG.debug(json.dumps(infoDict))
+        LOG.debug(json.dumps(infodict))
         self.entity.attributes['mcn.service.state'] = 'initialise'
 
         # Do init work here
-        self.entity.extras = {}
-        self.entity.extras['loc'] = 'foobar'
-        self.entity.extras['tenant_name'] = self.extras['tenant_name']
-
+        self.entity.extras = {'loc': 'foobar',
+                              'tenant_name': self.extras['tenant_name']}
 
         elapsed_time = time.time() - self.start_time
-        infoDict = {
+        infodict = {
                     'sm_name': self.entity.kind.term,
                     'phase': 'init',
                     'phase_event': 'done',
                     'response_time': elapsed_time,
                     }
-        LOG.debug(json.dumps(infoDict))
+        LOG.debug(json.dumps(infodict))
         return self.entity, self.extras
 
 
@@ -66,20 +65,22 @@ class Activate(Task):
 
     def run(self):
         self.start_time = time.time()
-        infoDict = {
+        infodict = {
                     'sm_name': self.entity.kind.term,
                     'phase': 'activate',
                     'phase_event': 'start',
                     'response_time': 0,
                     }
-        LOG.debug(json.dumps(infoDict))
+        LOG.debug(json.dumps(infodict))
         self.entity.attributes['mcn.service.state'] = 'activate'
 
         # Do activate work here
         LOG.debug('Activating the SO...')
         url = HTTP + '/api/v1/occi/default'
         heads = {
-            'Category': 'orchestrator; scheme="http://schemas.mobile-cloud-networking.eu/occi/service#"',
+            'Category': 'orchestrator; '
+                        'scheme="http://schemas.mobile-cloud-networking.eu/'
+                        'occi/service#"',
             'Content-Type': 'text/occi',
             'X-Auth-Token': self.extras['token'],
             'X-Tenant-Name': self.extras['tenant_name'],
@@ -87,7 +88,8 @@ class Activate(Task):
 
         occi_attrs = self.extras['srv_prms'].service_parameters(self.state)
         if len(occi_attrs) > 0:
-            LOG.info('Adding service-specific parameters to call... X-OCCI-Attribute: ' + occi_attrs)
+            LOG.info('Adding service-specific parameters to call... '
+                     'X-OCCI-Attribute: ' + occi_attrs)
             heads['X-OCCI-Attribute'] = occi_attrs
 
         LOG.debug('Initialising SO with: ' + url)
@@ -95,13 +97,13 @@ class Activate(Task):
         http_retriable_request('PUT', url, headers=heads)
 
         elapsed_time = time.time() - self.start_time
-        infoDict = {
+        infodict = {
                     'sm_name': self.entity.kind.term,
                     'phase': 'activate',
                     'phase_event': 'done',
                     'response_time': elapsed_time,
                     }
-        LOG.debug(json.dumps(infoDict))
+        LOG.debug(json.dumps(infodict))
         return self.entity, self.extras
 
 
@@ -111,26 +113,29 @@ class Deploy(Task):
 
     def run(self):
         self.start_time = time.time()
-        infoDict = {
+        infodict = {
                     'sm_name': self.entity.kind.term,
                     'phase': 'deploy',
                     'phase_event': 'start',
                     'response_time': 0,
                     }
-        LOG.debug(json.dumps(infoDict))
+        LOG.debug(json.dumps(infodict))
         self.entity.attributes['mcn.service.state'] = 'deploy'
 
         # Do deploy work here
         url = HTTP + '/api/v1/occi/default'
         params = {'action': 'deploy'}
         heads = {
-            'Category': 'deploy; scheme="http://schemas.mobile-cloud-networking.eu/occi/service#"',
+            'Category': 'deploy; '
+                        'scheme="http://schemas.mobile-cloud-networking.eu/'
+                        'occi/service#"',
             'Content-Type': 'text/occi',
             'X-Auth-Token': self.extras['token'],
             'X-Tenant-Name': self.extras['tenant_name']}
         occi_attrs = self.extras['srv_prms'].service_parameters(self.state)
         if len(occi_attrs) > 0:
-            LOG.info('Adding service-specific parameters to call... X-OCCI-Attribute:' + occi_attrs)
+            LOG.info('Adding service-specific parameters to call... '
+                     'X-OCCI-Attribute:' + occi_attrs)
             heads['X-OCCI-Attribute'] = occi_attrs
         LOG.debug('Deploying SO with: ' + url)
         LOG.info('Sending headers: ' + heads.__repr__())
@@ -144,13 +149,13 @@ class Deploy(Task):
         LOG.debug('SO Deployed ')
 
         elapsed_time = time.time() - self.start_time
-        infoDict = {
+        infodict = {
                     'sm_name': self.entity.kind.term,
                     'phase': 'deploy',
                     'phase_event': 'done',
                     'response_time': elapsed_time,
                     }
-        LOG.debug(json.dumps(infoDict))
+        LOG.debug(json.dumps(infodict))
         return self.entity, self.extras
 
     def deploy_complete(self, url):
@@ -174,7 +179,8 @@ class Deploy(Task):
                     LOG.info('Stack is ready')
                     return True
                 else:
-                    LOG.info('Stack is not ready. Current state state: ' + stack_state)
+                    LOG.info('Stack is not ready. Current state state: ' +
+                             stack_state)
                     return False
 
 
@@ -184,25 +190,25 @@ class Provision(Task):
 
     def run(self):
         self.start_time = time.time()
-        infoDict = {
+        infodict = {
                     'sm_name': self.entity.kind.term,
                     'phase': 'provision',
                     'phase_event': 'start',
                     'response_time': 0,
                     }
-        LOG.debug(json.dumps(infoDict))
+        LOG.debug(json.dumps(infodict))
         self.entity.attributes['mcn.service.state'] = 'provision'
 
         # Do provision work here
 
         elapsed_time = time.time() - self.start_time
-        infoDict = {
+        infodict = {
                     'sm_name': self.entity.kind.term,
                     'phase': 'provision',
                     'phase_event': 'done',
                     'response_time': elapsed_time,
                     }
-        LOG.debug(json.dumps(infoDict))
+        LOG.debug(json.dumps(infodict))
         return self.entity, self.extras
 
 
@@ -213,13 +219,13 @@ class Retrieve(Task):
 
     def run(self):
         self.start_time = time.time()
-        infoDict = {
+        infodict = {
                     'sm_name': self.entity.kind.term,
                     'phase': 'retrieve',
                     'phase_event': 'start',
                     'response_time': 0,
                     }
-        LOG.debug(json.dumps(infoDict))
+        LOG.debug(json.dumps(infodict))
 
         # Do retrieve work here
         if self.entity.attributes['mcn.service.state'] in ['activate',
@@ -251,13 +257,13 @@ class Retrieve(Task):
                       'deployed or provisioned, updated state')
 
         elapsed_time = time.time() - self.start_time
-        infoDict = {
+        infodict = {
                     'sm_name': self.entity.kind.term,
                     'phase': 'retrieve',
                     'phase_event': 'done',
                     'response_time': elapsed_time,
                     }
-        LOG.debug(json.dumps(infoDict))
+        LOG.debug(json.dumps(infodict))
         return self.entity, self.extras
 
 
@@ -269,25 +275,25 @@ class Update(Task):
 
     def run(self):
         self.start_time = time.time()
-        infoDict = {
+        infodict = {
                     'sm_name': self.entity.kind.term,
                     'phase': 'update',
                     'phase_event': 'start',
                     'response_time': 0,
                     }
-        LOG.debug(json.dumps(infoDict))
+        LOG.debug(json.dumps(infodict))
         self.entity.attributes['mcn.service.state'] = 'update'
 
         # Do update work here
 
         elapsed_time = time.time() - self.start_time
-        infoDict = {
+        infodict = {
                     'sm_name': self.entity.kind.term,
                     'phase': 'update',
                     'phase_event': 'done',
                     'response_time': elapsed_time,
                     }
-        LOG.debug(json.dumps(infoDict))
+        LOG.debug(json.dumps(infodict))
         return self.entity, self.extras
 
 
@@ -297,13 +303,13 @@ class Destroy(Task):
 
     def run(self):
         self.start_time = time.time()
-        infoDict = {
+        infodict = {
                     'sm_name': self.entity.kind.term,
                     'phase': 'destroy',
                     'phase_event': 'start',
                     'response_time': 0,
                     }
-        LOG.debug(json.dumps(infoDict))
+        LOG.debug(json.dumps(infodict))
         self.entity.attributes['mcn.service.state'] = 'destroy'
 
         # Do destroy work here
@@ -321,11 +327,11 @@ class Destroy(Task):
         http_retriable_request('DELETE', url, headers=heads)
 
         elapsed_time = time.time() - self.start_time
-        infoDict = {
+        infodict = {
                     'sm_name': self.entity.kind.term,
                     'phase': 'destroy',
                     'phase_event': 'done',
                     'response_time': elapsed_time,
                     }
-        LOG.debug(json.dumps(infoDict))
+        LOG.debug(json.dumps(infodict))
         return self.entity, self.extras
