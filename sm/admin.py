@@ -101,7 +101,7 @@ def update(name):
         # propagate update to SOs
         mongo_resources = get_mongo_connection()
         resources = mongo_resources.find_one()
-        if resources['_id']:
+        if not resources['_id']:
             return 'no SOs found!', 200
         del resources['_id']
         urls = []
