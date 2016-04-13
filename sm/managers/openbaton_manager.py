@@ -21,7 +21,7 @@ from sm.retry_http import http_retriable_request
 import time
 import json
 
-__author__ = 'merne'
+__author__ = 'merne and pku'
 
 obapi_addr = CONFIG.get('openbaton', 'host', None)
 obapi_port = CONFIG.get('openbaton', 'port', None)
@@ -131,7 +131,9 @@ class Deploy(Task):
                         'occi/service#"',
             'Content-Type': 'text/occi',
             'X-Auth-Token': self.extras['token'],
-            'X-Tenant-Name': self.extras['tenant_name']}
+            'X-Tenant-Name': self.extras['tenant_name'],
+            'X-OCCI-Attribute': 'occi.core.id=' +
+                                self.entity.identifier.replace(self.entity.kind.location, '')}
         occi_attrs = self.extras['srv_prms'].service_parameters(self.state)
         if len(occi_attrs) > 0:
             LOG.info('Adding service-specific parameters to call... '
@@ -164,7 +166,8 @@ class Deploy(Task):
             'Accept': 'application/occi+json',
             'X-Auth-Token': self.extras['token'],
             'X-Tenant-Name': self.extras['tenant_name'],
-        }
+            'X-OCCI-Attribute': 'occi.core.id=' +
+                                self.entity.identifier.replace(self.entity.kind.location, '')}
 
         LOG.info('checking service state at: ' + url)
         LOG.info('sending headers: ' + heads.__repr__())
@@ -236,7 +239,9 @@ class Retrieve(Task):
                 'Content-Type': 'text/occi',
                 'Accept': 'text/occi',
                 'X-Auth-Token': self.extras['token'],
-                'X-Tenant-Name': self.extras['tenant_name']}
+                'X-Tenant-Name': self.extras['tenant_name'],
+                'X-OCCI-Attribute': 'occi.core.id=' +
+                                    self.entity.identifier.replace(self.entity.kind.location, '')}
             LOG.info('Getting state of service orchestrator with: ' +
                      "localhost:8082" + '/api/v1/occidefault')
             LOG.info('Sending headers: ' + heads.__repr__())
@@ -315,7 +320,9 @@ class Destroy(Task):
         # Do destroy work here
         url = HTTP + '/api/v1/occi/default'
         heads = {'X-Auth-Token': self.extras['token'],
-                 'X-Tenant-Name': self.extras['tenant_name']}
+                 'X-Tenant-Name': self.extras['tenant_name'],
+                 'X-OCCI-Attribute': 'occi.core.id=' +
+                                     self.entity.identifier.replace(self.entity.kind.location, '')}
         occi_attrs = self.extras['srv_prms'].service_parameters(self.state)
         if len(occi_attrs) > 0:
             LOG.info('Adding service-specific parameters to call... '
